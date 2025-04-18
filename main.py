@@ -20,13 +20,11 @@ if __name__ == "__main__":
     ensure_admin()
 
     app = QApplication(sys.argv)
-
-    # ✅ 读取记住的登录信息
+    # 读取记住的登录信息
     session = load_login()
     if session:
         window = MainWindow(session["username"], session["role"])
     else:
         window = LoginWindow()
-
     window.show()
     sys.exit(app.exec_())
