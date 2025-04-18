@@ -76,6 +76,7 @@ class MainWindow(QWidget):
         threading.Thread(target=_play).start()
 
     def logout(self):
+        from ui.login_window import LoginWindow
         clear_login()       # 清除 session
         self.close()        # 关闭主窗口
         self.login = LoginWindow()  # 打开登录窗口

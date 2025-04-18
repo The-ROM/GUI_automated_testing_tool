@@ -7,15 +7,12 @@ class TestExecutor:
         self.timeout = config.get("timeout", 10)
 
     def _locate(self, locator):
-        """
-        locator = {"by":"image","value":"btn.png"}
-                or {"by":"text","value":"Submit"}
-        """
         if locator["by"] == "image":
             return pyautogui.locateCenterOnScreen(locator["value"], timeout=self.timeout)
+        elif locator["by"] == "coords":
+            return locator["value"]
         elif locator["by"] == "text":
-            # 简化：文本定位可以集成OCR
-            raise NotImplementedError("文本定位尚未实现")
+            raise NotImplementedError("文本识别未实现")
         else:
             raise ValueError("不支持的定位方式")
 
