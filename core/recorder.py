@@ -70,7 +70,6 @@ class Recorder:
         print(f"图像已保存: {image_path}")
         return image_path
 
-
     def on_click(self, x, y, button, pressed):
         """监听鼠标点击"""
         if not self.recording or not pressed:
@@ -78,13 +77,20 @@ class Recorder:
         size = self.image_region_size
         region = (x - size // 2, y - size // 2, size, size)
         image_path = self.capture_image(region)
-        with self.lock:
-            self.script.append({
-                "action": "click",
-                "locator": {"by": "image", "value": image_path,"fallback": [x, y]},
-                "button": str(button),
-                "time": time.time()
-            })
+
+        if button == mouse.Button.left and pressed:
+            # 鼠标按下时，记录点击位置作为拖动的起点
+            self.drag_start = (x, y)
+        elif button == mouse.Button.left and not pressed:
+            # 鼠标释放时，记录拖动的终点，并将操作记录为拖动
+            self.drag_end = (x, y)
+            with self.lock:
+                self.script.append({
+                    "action": "drag",
+                    "start_position": self.drag_start,
+                    "end_position": self.drag_end,
+                    "time": time.time()
+                })
 
     def on_scroll(self, x, y, dx, dy):
         """监听鼠标滚轮"""

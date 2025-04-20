@@ -8,15 +8,13 @@ class UserManager:
     def _hash(self, pwd):
         return hashlib.sha256(pwd.encode("utf-8")).hexdigest()
 
-    def add_user(self, username, password, role="tester"):
-        hashed = self._hash(password)
-        try:
-            self.db.execute(
-                "INSERT INTO users(username,password,role) VALUES (?, ?, ?)",
-                (username, hashed, role)
-            )
-        except Exception as e:
-            raise ValueError("用户已存在或插入失败") from e
+    def add_user(self, username, password, role="user", email=None):
+        db = Database.get_instance()
+        exists = db.query("SELECT 1 FROM users WHERE username=?", (username,))
+        if exists:
+            raise ValueError("该账号已被注册")
+        db.execute("INSERT INTO users(username, password, role, email) VALUES (?, ?, ?, ?)",
+                   (username, password, role, email))
 
     def remove_user(self, username):
         self.db.execute("DELETE FROM users WHERE username=?", (username,))

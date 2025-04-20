@@ -155,18 +155,24 @@ class TestExecutor:
                         time.sleep(delay)
                 last_time = now
 
-                if action == "click":
+                # 处理拖动操作
+                if step["action"] == "drag":
+                    start_pos = step["start_position"]
+                    end_pos = step["end_position"]
+                    self.mouse_drag(start_pos, end_pos)  # 调用拖动操作
+                elif step["action"] == "click":
                     self.click(step["locator"])
-                elif action == "move":
+                elif step["action"] == "move":
                     self.move(step["locator"])
-                elif action == "scroll":
+                elif step["action"] == "scroll":
                     self.scroll(step["locator"]["value"], step["delta"])
-                elif action == "keyboard":
+                elif step["action"] == "keyboard":
                     self.input_key(step["key"])
-                elif action == "assert":
+                elif step["action"] == "assert":
                     self.assert_exists(step["locator"])
                 else:
-                    raise ValueError(f"未知操作类型：{action}")
+                    raise ValueError(f"未知操作类型：{step['action']}")
+
                 success += 1
                 log_line = f"[✓] 步骤 {i+1}/{total} 执行成功: {action}"
                 log_lines.append(log_line)
@@ -220,3 +226,9 @@ class TestExecutor:
                 self.stop()
         except AttributeError:
             pass  # 忽略非字符键
+
+    def mouse_drag(self, start, end):
+        """模拟鼠标拖动"""
+        pyautogui.mouseDown(x=start[0], y=start[1])  # 鼠标按下
+        pyautogui.moveTo(end[0], end[1], duration=0.5)  # 拖动到目标位置
+        pyautogui.mouseUp()  # 鼠标松开

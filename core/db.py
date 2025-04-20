@@ -28,11 +28,31 @@ class Database:
         c = self.conn.cursor()
         # 用户表
         c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            password TEXT NOT NULL,
-            role     TEXT NOT NULL
-        )""")
+                  CREATE TABLE IF NOT EXISTS users
+                  (
+                      user_id
+                      INTEGER
+                      PRIMARY
+                      KEY
+                      AUTOINCREMENT,
+                      username
+                      TEXT
+                      UNIQUE
+                      NOT
+                      NULL,
+                      password
+                      TEXT
+                      NOT
+                      NULL,
+                      role
+                      TEXT
+                      NOT
+                      NULL DEFAULT 'user',
+                                             email TEXT,
+                                             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
         # 脚本表
         c.execute("""
         CREATE TABLE IF NOT EXISTS scripts (
