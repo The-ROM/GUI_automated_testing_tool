@@ -25,6 +25,7 @@ class MainWindow(QWidget):
         self.recorder = Recorder(cfg)
         self.manager  = ScriptManager()
         self.executor = TestExecutor(cfg)
+        self.image_manager = ImageManager()
 
         # UI Tabs
         tabs = QTabWidget()

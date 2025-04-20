@@ -68,6 +68,12 @@ class Database:
         return c
 
     def query(self, sql, params=()):
-        c = self.conn.cursor()
-        c.execute(sql, params)
-        return c.fetchall()
+        try:
+            c = self.conn.cursor()
+            c.execute(sql, params)
+            return c.fetchall()
+        except Exception as e:
+            from utils.logger import log
+            log(f"[DB QUERY ERROR] {e}")
+            return []  # ⚠️ 确保始终返回一个空列表，而不是 None
+
