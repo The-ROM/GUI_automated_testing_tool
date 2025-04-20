@@ -1,0 +1,8 @@
+{
+    "click_interval": 0.5,
+    "timeout": 10,
+    "image_confidence": 0.85,
+    "enable_fallback": true,
+    "image_region_size": 120,
+    "image_retry_count": 3
+}

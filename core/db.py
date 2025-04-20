@@ -36,9 +36,11 @@ class Database:
         # 脚本表
         c.execute("""
         CREATE TABLE IF NOT EXISTS scripts (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            content    TEXT    NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT,
+          tags TEXT,
+          content TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
         # 配置表
         c.execute("""
@@ -47,6 +49,17 @@ class Database:
             value TEXT NOT NULL
         )""")
         self.conn.commit()
+        # 测试报告表
+        c.execute("""CREATE TABLE IF NOT EXISTS reports (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          script_id INTEGER,
+          summary TEXT,
+          success_rate REAL,
+          duration REAL,
+          detail TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
+
 
     def execute(self, sql, params=()):
         c = self.conn.cursor()

@@ -1,60 +1,222 @@
-import pyautogui, time
+import pyautogui
+import time
+import threading
+from pynput import keyboard
+from core.db import Database
 from utils.logger import log
+import pytesseract
+from PIL import Image
+import os
 
 class TestExecutor:
     def __init__(self, config):
-        self.click_interval = config.get("click_interval", 0.5)
+        self.click_interval = config.get("click_interval", 0.1)
         self.timeout = config.get("timeout", 10)
+        self.ocr_enabled = True
+        self.image_retry_count = config.get("image_retry_count", 3)
+        self.image_confidence = config.get("image_confidence", 0.8)
+        self.enable_fallback = config.get("enable_fallback", True)
+        self.paused_event = threading.Event()
+        self.paused_event.set()  # 默认不暂停
+        self.stopped_event = threading.Event()
+
+        self.is_playing = False  # 控制是否处于回放状态
+        self.is_recording = False  # 控制是否处于录制状态
+        self.script = []  # 用于存储当前回放的脚本
 
     def _locate(self, locator):
-        if locator["by"] == "image":
-            return pyautogui.locateCenterOnScreen(locator["value"], timeout=self.timeout)
-        elif locator["by"] == "coords":
-            return locator["value"]
+        if locator["by"] == "coords":
+            pt = tuple(locator["value"])
+
+        elif locator["by"] == "image":
+            image_path = locator["value"]
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"图像文件不存在：{image_path}")
+
+            pt = None
+            for attempt in range(self.image_retry_count):
+                pt = pyautogui.locateCenterOnScreen(image_path, confidence=self.image_confidence)
+                if pt:
+                    log(f"[图像识别] 成功（第 {attempt + 1} 次）")
+                    break
+                else:
+                    log(f"[图像识别] 第 {attempt + 1} 次失败，重试中...")
+                    time.sleep(0.3)
+            if pt is None:
+                fallback = locator.get("fallback")
+                if self.enable_fallback and fallback and len(fallback) == 2:
+                    log(f"[WARN] 图像识别失败，使用 fallback 坐标：{fallback}")
+                    pt = tuple(fallback)
+                else:
+                    raise RuntimeError(f"图像未匹配到屏幕：{image_path}")
+
         elif locator["by"] == "text":
-            raise NotImplementedError("文本识别未实现")
+            if not self.ocr_enabled:
+                raise ValueError("未启用 OCR 功能")
+            screenshot = pyautogui.screenshot()
+            boxes = pytesseract.image_to_data(screenshot, output_type=pytesseract.Output.DICT)
+            for i in range(len(boxes["text"])):
+                if locator["value"] in boxes["text"][i]:
+                    x = boxes["left"][i] + boxes["width"][i] // 2
+                    y = boxes["top"][i] + boxes["height"][i] // 2
+                    pt = (x, y)
+                    break
+            else:
+                raise ValueError(f"OCR 未找到文本：{locator['value']}")
         else:
-            raise ValueError("不支持的定位方式")
+            raise ValueError(f"不支持的定位方式: {locator['by']}")
+
+        if not isinstance(pt, (tuple, list)) or len(pt) != 2:
+            raise TypeError(f"_locate 返回非法坐标：{pt}")
+        return pt
 
     def click(self, locator):
+        """模拟点击操作"""
         pt = self._locate(locator)
         if not pt:
-            log(f"元素未找到：{locator}")
             raise RuntimeError("定位失败")
         pyautogui.click(pt)
         time.sleep(self.click_interval)
 
-    def input_text(self, locator, text):
-        self.click(locator)
-        pyautogui.write(text, interval=0.05)
+    def move(self, locator):
+        """模拟鼠标移动"""
+        pt = self._locate(locator)
+        if pt:
+            pyautogui.moveTo(pt)
+            time.sleep(0.1)
+
+    def scroll(self, position, delta):
+        """模拟滚动操作"""
+        x, y = position
+        pyautogui.moveTo(x, y)
+        pyautogui.scroll(delta)
+        time.sleep(0.1)
+
+    def input_key(self, key):
+        """模拟键盘输入"""
+        pyautogui.write(key)
+        time.sleep(self.click_interval)
 
     def assert_exists(self, locator):
+        """验证元素是否存在"""
         pt = self._locate(locator)
         if not pt:
-            log(f"断言失败：元素不存在 {locator}")
-            raise AssertionError("断言失败")
+            raise AssertionError("断言失败：目标元素未出现")
 
-    def run_script(self, script):
-        """
-        脚本格式示例：
-        [
-          {"action":"click", "locator":{"by":"image","value":"btn.png"}},
-          {"action":"input", "locator":{"by":"image","value":"input.png"}, "text":"hello"},
-          {"action":"assert", "locator":{"by":"image","value":"success.png"}}
-        ]
-        """
-        for step in script:
+    def screenshot_error(self, step, reason, index):
+        """当步骤执行失败时截图"""
+        os.makedirs("data/errors", exist_ok=True)
+        fname = f"data/errors/step_{index}_error.png"
+        pyautogui.screenshot(fname)
+        log(f"[ERROR] 步骤 {index} 执行失败: {reason}，截图已保存到 {fname}")
+
+    def run_script(self, script, script_id=None):
+        """执行回放脚本"""
+        log("🟢 开始执行脚本...")
+        self.is_playing = True
+        log_lines = []  # 用于存储每一步的执行日志
+        start_time = time.time()
+        last_time = None
+        total = len(script)
+        success = 0
+
+        for i, step in enumerate(script):
+            if self.stopped_event.is_set():
+                log("回放已停止")
+                break
+
+            while not self.paused_event.is_set():
+                time.sleep(0.1)
+
+            # 同步操作时间间隔
+            if last_time and "time" in step:
+                delay = step["time"] - last_time
+                time.sleep(delay)
+
+            last_time = step["time"]
+
+            # 更新实时执行状态
+            log(f"正在执行第 {i+1} 步，共 {total} 步")
             try:
-                act = step["action"]
-                if act == "click":
+                # 自动补 locator
+                if "locator" not in step:
+                    if "position" in step:
+                        step["locator"] = {"by": "coords", "value": step["position"]}
+                    elif "x" in step and "y" in step:
+                        step["locator"] = {"by": "coords", "value": [step["x"], step["y"]]}
+                    else:
+                        raise ValueError("无 locator 且无坐标信息，无法执行")
+
+                action = step["action"]
+                now = step.get("time")
+                if last_time and now:
+                    delay = now - last_time
+                    if 0 < delay < 5:
+                        time.sleep(delay)
+                last_time = now
+
+                if action == "click":
                     self.click(step["locator"])
-                elif act == "input":
-                    self.input_text(step["locator"], step["text"])
-                elif act == "assert":
+                elif action == "move":
+                    self.move(step["locator"])
+                elif action == "scroll":
+                    self.scroll(step["locator"]["value"], step["delta"])
+                elif action == "keyboard":
+                    self.input_key(step["key"])
+                elif action == "assert":
                     self.assert_exists(step["locator"])
                 else:
-                    log(f"未知动作：{act}")
-                log(f"执行成功：{step}")
+                    raise ValueError(f"未知操作类型：{action}")
+                success += 1
+                log_line = f"[✓] 步骤 {i+1}/{total} 执行成功: {action}"
+                log_lines.append(log_line)
+                log(log_line)
             except Exception as e:
-                log(f"执行异常：{step} -> {e}")
-                raise
+                log_line = f"[✗] 步骤 {i + 1}/{total} 执行失败: {e}"
+                log_lines.append(log_line)
+                log(log_line)
+                self.screenshot_error(step, str(e), i + 1)
+                continue
+
+        duration = round(time.time() - start_time, 2)
+        rate = round(success / total * 100, 2) if total else 0
+        log(f"✅ 执行完成：成功 {success} / 共 {total} 步，成功率 {rate}%，用时 {duration}s")
+
+        # 保存报告到数据库
+        db = Database.get_instance()
+        report_detail = "\n".join(log_lines)
+        db.execute("""
+                   INSERT INTO reports(script_id, summary, success_rate, duration, detail)
+                   VALUES (?, ?, ?, ?, ?)
+                   """, (script_id, f"成功率 {rate}%", rate / 100, duration, report_detail))
+        log("测试报告已生成并保存到数据库")
+
+    def pause(self):
+        """暂停回放"""
+        log("暂停回放")
+        self.paused_event.clear()  # 清除暂停标志
+
+    def resume(self):
+        """恢复回放"""
+        log("恢复回放")
+        self.paused_event.set()  # 设置为恢复状态
+
+    def stop(self):
+        """停止回放"""
+        log("停止回放")
+        self.stopped_event.set()  # 设置停止标志
+
+    def on_key_press(self, key):
+        """监听按键事件"""
+        try:
+            if key == keyboard.Key.esc:  # 按 ESC 键停止回放
+                self.stop()
+            elif key.char == 'p':  # 按 P 键暂停或恢复回放
+                if self.paused_event.is_set():
+                    self.pause()
+                else:
+                    self.resume()
+            elif key.char == 's':  # 按 S 键停止回放
+                self.stop()
+        except AttributeError:
+            pass  # 忽略非字符键

@@ -41,4 +41,3 @@ _logger = Logger()
 def log(msg): _logger.info(msg)
 def warn(msg): _logger.warn(msg)
 def error(msg): _logger.error(msg)
-def get_logger(): return _logger  # 如需自定义参数可改此接口
