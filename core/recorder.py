@@ -17,6 +17,9 @@ class Recorder:
         self.image_save_path = "recorded_images/"
         self.config = config or {}
         self.image_region_size = self.config.get("image_region_size", 100)  # ✅ 默认100
+        self.dragging = False
+        self.drag_start = None
+        self.last_move = None
         os.makedirs(self.image_save_path, exist_ok=True)  # 创建图像保存目录
 
     def start(self):
@@ -71,26 +74,56 @@ class Recorder:
         return image_path
 
     def on_click(self, x, y, button, pressed):
-        """监听鼠标点击"""
-        if not self.recording or not pressed:
+        if not self.recording:
             return
-        size = self.image_region_size
-        region = (x - size // 2, y - size // 2, size, size)
-        image_path = self.capture_image(region)
 
-        if button == mouse.Button.left and pressed:
-            # 鼠标按下时，记录点击位置作为拖动的起点
+        if pressed:
+            self.dragging = True
             self.drag_start = (x, y)
-        elif button == mouse.Button.left and not pressed:
-            # 鼠标释放时，记录拖动的终点，并将操作记录为拖动
-            self.drag_end = (x, y)
+
             with self.lock:
                 self.script.append({
-                    "action": "drag",
-                    "start_position": self.drag_start,
-                    "end_position": self.drag_end,
+                    "action": "mouseDown",
+                    "position": [x, y],
+                    "button": button.name,
                     "time": time.time()
                 })
+
+        else:
+            self.dragging = False
+            start = self.drag_start
+            end = (x, y)
+            dist = ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5
+
+            if dist < 10:  # 拖动距离小，认为是点击
+                region = (x - self.image_region_size // 2,
+                          y - self.image_region_size // 2,
+                          self.image_region_size,
+                          self.image_region_size)
+                image_path = self.capture_image(region)
+
+                with self.lock:
+                    self.script.append({
+                        "action": "click",
+                        "locator": {
+                            "by": "image",
+                            "value": image_path,
+                            "fallback": [x, y]
+                        },
+                        "button": button.name,
+                        "time": time.time()
+                    })
+
+            if dist >= 10:  # 是拖动
+                with self.lock:
+                    self.script.append({
+                        "action": "mouseUp",
+                        "position": [x, y],
+                        "button": button.name,
+                        "time": time.time()
+                    })
+
+            self.drag_start = None
 
     def on_scroll(self, x, y, dx, dy):
         """监听鼠标滚轮"""
@@ -105,9 +138,9 @@ class Recorder:
             })
 
     def on_move(self, x, y):
-        """监听鼠标移动"""
-        if not self.recording:
+        if not self.recording or not self.dragging:
             return
+        self.last_move = (x, y)
         with self.lock:
             self.script.append({
                 "action": "move",
@@ -133,3 +166,21 @@ class Recorder:
                     "key": key_val,
                     "time": time.time()
                 })
+
+    def insert_drag_moves(self, start, end, interval=20):
+        """为拖动插入平滑 move 步骤"""
+        x1, y1 = start
+        x2, y2 = end
+        dx, dy = x2 - x1, y2 - y1
+        distance = (dx ** 2 + dy ** 2) ** 0.5
+        steps = max(1, int(distance // interval))
+
+        for i in range(1, steps):
+            t = i / steps
+            x = int(x1 + dx * t)
+            y = int(y1 + dy * t)
+            self.script.append({
+                "action": "move",
+                "position": [x, y],
+                "time": time.time()
+            })

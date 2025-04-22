@@ -70,20 +70,25 @@ class TestExecutor:
             raise TypeError(f"_locate 返回非法坐标：{pt}")
         return pt
 
-    def click(self, locator):
+    def click(self, locator, button="left"):
         """模拟点击操作"""
         pt = self._locate(locator)
         if not pt:
             raise RuntimeError("定位失败")
-        pyautogui.click(pt)
+
+        # 区分按钮类型
+        pyautogui.click(x=pt[0], y=pt[1], button=button)
         time.sleep(self.click_interval)
 
-    def move(self, locator):
-        """模拟鼠标移动"""
-        pt = self._locate(locator)
+    def move(self, locator_or_position):
+        if isinstance(locator_or_position, dict):
+            pt = self._locate(locator_or_position)
+        else:
+            pt = tuple(locator_or_position)
+
         if pt:
             pyautogui.moveTo(pt)
-            time.sleep(0.1)
+            time.sleep(0.01)
 
     def scroll(self, position, delta):
         """模拟滚动操作"""
@@ -161,7 +166,8 @@ class TestExecutor:
                     end_pos = step["end_position"]
                     self.mouse_drag(start_pos, end_pos)  # 调用拖动操作
                 elif step["action"] == "click":
-                    self.click(step["locator"])
+                    button = step.get("button", "left")  # 默认左键
+                    self.click(step["locator"], button)
                 elif step["action"] == "move":
                     self.move(step["locator"])
                 elif step["action"] == "scroll":
@@ -170,6 +176,12 @@ class TestExecutor:
                     self.input_key(step["key"])
                 elif step["action"] == "assert":
                     self.assert_exists(step["locator"])
+                elif action == "mouseDown":
+                    pos = step["position"]
+                    pyautogui.mouseDown(x=pos[0], y=pos[1], button=step.get("button", "left"))
+                elif action == "mouseUp":
+                    pos = step["position"]
+                    pyautogui.mouseUp(x=pos[0], y=pos[1], button=step.get("button", "left"))
                 else:
                     raise ValueError(f"未知操作类型：{step['action']}")
 

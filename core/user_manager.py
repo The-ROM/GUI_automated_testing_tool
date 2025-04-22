@@ -23,10 +23,16 @@ class UserManager:
         hashed = self._hash(password)
         rows = self.db.query(
             "SELECT role FROM users WHERE username=? AND password=?",
-            (username, hashed)
+            (username, password)
         )
         return rows[0]["role"] if rows else None
 
     def list_users(self):
-        rows = self.db.query("SELECT username,role FROM users")
-        return [dict(r) for r in rows]
+        return Database.get_instance().query("SELECT * FROM users ORDER BY user_id")
+
+    def delete_user(self, user_id):
+        Database.get_instance().execute("DELETE FROM users WHERE user_id=?", (user_id,))
+
+    def update_user_role(self, user_id, role):
+        Database.get_instance().execute("UPDATE users SET role=? WHERE user_id=?", (role, user_id))
+

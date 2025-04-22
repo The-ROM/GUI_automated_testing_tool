@@ -49,7 +49,9 @@ class Database:
                       NOT
                       NULL DEFAULT 'user',
                                              email TEXT,
-                                             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                                             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                      status TEXT DEFAULT 'active'  -- 用户状态，支持 active/inactive
+
         )
         """)
 

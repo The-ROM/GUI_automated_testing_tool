@@ -151,15 +151,18 @@ class ScriptEditor(QWidget):
         try:
             if isinstance(script, list):
                 for step in script:
-                    # 确保 step 中有 'locator' 键
+                    if not isinstance(step, dict):
+                        continue
+                    # 只处理含 locator 且类型为 image 的操作
                     if "locator" in step:
                         locator = step["locator"]
-                        if locator.get("by") == "image" and "value" in locator:
-                            path = locator["value"]
-                            if isinstance(path, str) and path:
-                                images.add(os.path.basename(path))
-                    else:
-                        log(f"[图像提取] 步骤 {step} 缺少 locator")
+                        try:
+                            if locator["by"] == "image" and "value" in locator:
+                                path = locator["value"]
+                                if isinstance(path, str) and path:
+                                    images.add(os.path.basename(path))
+                        except Exception as e:
+                            log(f"[图像提取异常] 步骤处理失败：{e}")
         except Exception as e:
             log(f"[图像提取失败] {e}")
         return images

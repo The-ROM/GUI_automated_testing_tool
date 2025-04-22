@@ -10,7 +10,8 @@ class LoginWindow(QWidget):
         self.um = UserManager()
         self.setWindowTitle("登录")
         self.user_edit = QLineEdit(); self.user_edit.setPlaceholderText("用户名")
-        self.pwd_edit  = QLineEdit(); self.pwd_edit.setPlaceholderText("密码"); self.pwd_edit.setEchoMode(QLineEdit.Password)
+        self.pwd_edit  = QLineEdit(); self.pwd_edit.setPlaceholderText("密码");
+        self.pwd_edit.setEchoMode(QLineEdit.Password)
         self.login_btn = QPushButton("登录")
         self.register_btn = QPushButton("注册账号")
         layout = QVBoxLayout()
